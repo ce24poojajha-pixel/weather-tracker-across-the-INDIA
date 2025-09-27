@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Simple Weather App</title>
+  <style>
+    :root{
+      --bg:#0f172a; --card:#0b1220; --accent:#60a5fa; --muted:#94a3b8;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;background:linear-gradient(180deg,#001026 0%, #07203a 100%);color:#e6eef8;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .app{width:100%;max-width:760px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:16px;padding:24px;box-shadow:0 8px 30px rgba(2,6,23,0.6);}
+
+    header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+    header h1{font-size:20px;margin:0}
+    .controls{display:flex;gap:8px;align-items:center}
+    input[type="text"]{flex:1;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit;outline:none;font-size:15px}
+    button{padding:10px 14px;border-radius:10px;border:none;background:var(--accent);color:#04213a;font-weight:600;cursor:pointer}
+    button:disabled{opacity:0.6;cursor:not-allowed}
+
+    .card{display:grid;grid-template-columns:120px 1fr;gap:16px;align-items:center;padding:18px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.03)}
+    .icon{display:flex;align-items:center;justify-content:center}
+    .icon img{width:96px;height:96px}
+    .meta .place{font-size:18px;font-weight:700}
+    .meta .time{color:var(--muted);font-size:13px;margin-top:2px}
+
+    .temp{font-size:44px;font-weight:800}
+    .desc{font-size:15px;color:var(--muted);margin-top:6px}
+    .extra{margin-top:12px;display:flex;gap:12px;flex-wrap:wrap}
+    .pill{background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.02);font-size:13px}
+
+    .notice{color:var(--muted);font-size:14px;margin-top:12px}
+    .error{color:#ffb4b4;background:rgba(255,80,80,0.06);padding:10px;border-radius:8px;margin-top:12px;border:1px solid rgba(255,80,80,0.12)}
+
+    footer{margin-top:14px;color:var(--muted);font-size:13px}
+
+    @media (max-width:560px){.card{grid-template-columns:1fr;grid-template-rows:auto auto}.icon img{width:80px;height:80px}.temp{font-size:36px}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Weather App</h1>
+        <div style="color:var(--muted);font-size:13px">Type a city, town, or country — e.g. "Mumbai" or "India"</div>
+      </div>
+    </header>
+
+    <div class="controls">
+      <input id="locationInput" type="text" placeholder="Enter location (city, region or country)" value="India" />
+      <button id="searchBtn">Get Weather</button>
+    </div>
+
+    <div id="resultArea" style="margin-top:18px;display:none">
+      <div class="card" id="card">
+        <div class="icon"><img id="conditionIcon" src="" alt="icon"/></div>
+        <div class="meta">
+          <div class="place" id="place">—</div>
+          <div class="time" id="localTime">—</div>
+
+          <div style="display:flex;align-items:center;gap:18px;margin-top:10px">
+            <div>
+              <div class="temp" id="temp">-- °C</div>
+              <div class="desc" id="conditionText">—</div>
+            </div>
+            <div style="margin-left:auto;text-align:right">
+              <div class="pill" id="feelsLike">Feels like: --</div>
+              <div class="pill" id="humidity" style="margin-top:8px">Humidity: --</div>
+            </div>
+          </div>
+
+          <div class="extra" id="extras">
+            <!-- extra pills (wind, pressure, condition) -->
+          </div>
+        </div>
+      </div>
+
+      <div id="aqiBlock" style="margin-top:12px;display:none">
+        <strong>Air Quality</strong>
+        <div id="aqiText" style="margin-top:6px;color:var(--muted)"></div>
+      </div>
+
+      <div id="error" class="error" style="display:none"></div>
+    </div>
+
+    <div id="loadingNotice" class="notice" style="display:none">Loading weather…</div>
+
+    <footer>Note: This demo uses your API key in client-side code — for production, proxy the request from your server to keep the key private.</footer>
+  </div>
+
+  <script>
+    // === CONFIG ===
+    // You provided this API URL/key in your message. It's used here as-is.
+    const API_KEY = '6d282e1bbc814a38a9984932252709';
+    const API_BASE = 'http://api.weatherapi.com/v1/current.json';
+
+    // === UI refs ===
+    const input = document.getElementById('locationInput');
+    const btn = document.getElementById('searchBtn');
+    const resultArea = document.getElementById('resultArea');
+    const loadingNotice = document.getElementById('loadingNotice');
+    const errorBox = document.getElementById('error');
+
+    const placeEl = document.getElementById('place');
+    const timeEl = document.getElementById('localTime');
+    const tempEl = document.getElementById('temp');
+    const conditionEl = document.getElementById('conditionText');
+    const iconEl = document.getElementById('conditionIcon');
+    const feelsEl = document.getElementById('feelsLike');
+    const humidityEl = document.getElementById('humidity');
+    const extrasEl = document.getElementById('extras');
+    const aqiBlock = document.getElementById('aqiBlock');
+    const aqiText = document.getElementById('aqiText');
+
+    function showLoading(on=true){
+      loadingNotice.style.display = on ? 'block' : 'none';
+      btn.disabled = on;
+    }
+
+    function showError(msg){
+      errorBox.style.display = 'block';
+      errorBox.textContent = msg;
+    }
+
+    function clearError(){
+      errorBox.style.display = 'none';
+      errorBox.textContent = '';
+    }
+
+    async function getWeatherFor(query){
+      clearError();
+      resultArea.style.display = 'none';
+      aqiBlock.style.display = 'none';
+      showLoading(true);
+
+      try{
+        const url = `${API_BASE}?key=${API_KEY}&q=${encodeURIComponent(query)}&aqi=yes`;
+        const resp = await fetch(url);
+        if(!resp.ok){
+          const txt = await resp.text();
+          throw new Error(`HTTP ${resp.status} - ${txt}`);
+        }
+        const data = await resp.json();
+        renderWeather(data);
+      }catch(err){
+        console.error(err);
+        showError('Could not fetch weather. ' + (err.message || ''));
+      }finally{
+        showLoading(false);
+      }
+    }
+
+    function renderWeather(data){
+      if(!data || !data.location || !data.current) {
+        showError('Unexpected response from weather API.');
+        return;
+      }
+      resultArea.style.display = 'block';
+
+      placeEl.textContent = `${data.location.name}, ${data.location.region || data.location.country}`;
+      timeEl.textContent = `Local time: ${data.location.localtime}`;
+
+      const c = data.current;
+      // Temperature: show celsius and fahrenheit
+      tempEl.textContent = `${c.temp_c.toFixed(1)} °C / ${c.temp_f.toFixed(1)} °F`;
+      conditionEl.textContent = c.condition && c.condition.text ? c.condition.text : '';
+      iconEl.src = (c.condition && c.condition.icon) ? ('https:' + c.condition.icon) : '';
+      iconEl.alt = c.condition && c.condition.text ? c.condition.text : 'weather icon';
+
+      feelsEl.textContent = `Feels like: ${c.feelslike_c.toFixed(1)} °C`;
+      humidityEl.textContent = `Humidity: ${c.humidity}%`;
+
+      // extras
+      extrasEl.innerHTML = '';
+      extrasEl.appendChild(makePill(`Wind: ${c.wind_kph} kph`));
+      extrasEl.appendChild(makePill(`Wind dir: ${c.wind_dir}`));
+      extrasEl.appendChild(makePill(`Pressure: ${c.pressure_mb} mb`));
+      extrasEl.appendChild(makePill(`UV index: ${c.uv}`));
+
+      // AQI (if available)
+      if(data.current && data.current.air_quality){
+        const aq = data.current.air_quality;
+        // WeatherAPI returns AQ components like 'us-epa-index' sometimes. We'll show a few.
+        const index = aq['us-epa-index'] ?? aq['gb-defra-index'] ?? null;
+        let lines = [];
+        if(index !== null) lines.push(`Overall index: ${index}`);
+        // show PM2.5 and PM10 if present
+        if(aq['pm2_5'] !== undefined) lines.push(`PM2.5: ${aq['pm2_5'].toFixed(2)} µg/m³`);
+        if(aq['pm10'] !== undefined) lines.push(`PM10: ${aq['pm10'].toFixed(2)} µg/m³`);
+        if(lines.length){
+          aqiText.textContent = lines.join(' · ');
+          aqiBlock.style.display = 'block';
+        }
+      }
+    }
+
+    function makePill(text){
+      const d = document.createElement('div');
+      d.className = 'pill';
+      d.textContent = text;
+      return d;
+    }
+
+    // event listeners
+    btn.addEventListener('click', ()=>{
+      const q = input.value.trim();
+      if(!q) { showError('Please enter a location.'); return; }
+      getWeatherFor(q);
+    });
+
+    input.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter') btn.click();
+    });
+
+    // initial fetch for the default value
+    window.addEventListener('DOMContentLoaded', ()=>{
+      const defaultQuery = input.value.trim();
+      if(defaultQuery) getWeatherFor(defaultQuery);
+    });
+  </script>
+</body>
+</html>
